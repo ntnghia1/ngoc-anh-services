@@ -1,0 +1,72 @@
+import React, { useState } from 'react'
+import { Routes, Route, Link, NavLink } from 'react-router-dom'
+import Home from './Home.jsx'
+import SendMoney from './SendMoney.jsx'
+import VisaServices from './VisaServices.jsx'
+import TrackFaqs from './TrackFaqs.jsx'
+import Contact from './Contact.jsx'
+import { makeT } from './translator'
+
+export default function App(){
+  const [lang, setLang] = useState('en')
+  const t = makeT(lang)
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      {/* TOP INFO BAR */}
+      <div className="bg-emerald-50 border-b">
+        <div className="max-w-6xl mx-auto px-4 py-1.5 flex items-center justify-between gap-3 flex-wrap">
+          <span className="font-medium">{t('barCallZelle')}: (720) 226-4972</span>
+          <div className="flex items-center gap-2 text-xs">
+            <button
+              className={`px-2 py-1 rounded ${lang==='en' ? 'bg-emerald-600 text-white' : 'bg-white border'}`}
+              onClick={()=>setLang('en')}
+            >
+              EN
+            </button>
+            <button
+              className={`px-2 py-1 rounded ${lang==='vi' ? 'bg-emerald-600 text-white' : 'bg-white border'}`}
+              onClick={()=>setLang('vi')}
+            >
+              VI
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* NAVBAR */}
+      <nav className="bg-white border-b sticky top-0 z-20">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-6">
+          <Link to="/" className="font-semibold">{t('brand')}</Link>
+          <div className="flex items-center gap-4">
+            <NavLink to="/" className={({isActive})=> isActive ? 'text-emerald-700 font-medium' : 'text-slate-700'}>{t('home')}</NavLink>
+            <NavLink to="/send-money" className={({isActive})=> isActive ? 'text-emerald-700 font-medium' : 'text-slate-700'}>{t('sendMoney')}</NavLink>
+            <NavLink to="/visa-services" className={({isActive})=> isActive ? 'text-emerald-700 font-medium' : 'text-slate-700'}>
+              {lang==='vi' ? t('visaServicesVi') : t('visaServices')}
+            </NavLink>
+            <NavLink to="/track-faqs" className={({isActive})=> isActive ? 'text-emerald-700 font-medium' : 'text-slate-700'}>{t('trackFaqs')}</NavLink>
+            <NavLink to="/contact" className={({isActive})=> isActive ? 'text-emerald-700 font-medium' : 'text-slate-700'}>{t('contact')}</NavLink>
+          </div>
+        </div>
+      </nav>
+
+      {/* CONTENT */}
+      <div className="flex-1">
+        <Routes>
+          <Route path="/" element={<Home t={t} />} />
+          <Route path="/send-money" element={<SendMoney />} />
+          <Route path="/visa-services" element={<VisaServices t={t} />} />
+          <Route path="/track-faqs" element={<TrackFaqs />} />
+          <Route path="/contact" element={<Contact t={t} />} />
+        </Routes>
+      </div>
+
+      {/* FOOTER */}
+      <footer className="border-t">
+        <div className="max-w-6xl mx-auto px-4 py-6 text-sm text-slate-600">
+          © {new Date().getFullYear()} Ngọc Anh Services
+        </div>
+      </footer>
+    </div>
+  )
+}

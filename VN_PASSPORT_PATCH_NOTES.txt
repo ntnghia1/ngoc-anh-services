@@ -1,0 +1,10 @@
+
+VN Passport Page Patch
+----------------------
+- Added src/VNPassport.jsx (fee $230; required fields; 3 file uploads).
+- Added route '/vn-passport' and attempted to add a nav link labeled 'VN Passport' near 'Visa Services'.
+- Submission: posts to '/.netlify/functions/sendEmail' (same pattern as Visa page). If unreachable, falls back to mailto to ntnghia00@yahoo.com.
+- Shows a Transaction ID banner with Copy and displays the fee.
+- Includes a customer email field (for confirmation copy via your email function).
+
+If nav link didn't appear, manually add: <Link to="/vn-passport">VN Passport</Link> in your header or nav.
