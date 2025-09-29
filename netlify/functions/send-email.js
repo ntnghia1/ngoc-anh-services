@@ -9,6 +9,7 @@ export default async (req, context) => {
     const { toCustomer, toAdmin, customer = {}, txId = '', details = {}, zelle = {} } = body;
 
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
+    const DEFAULT_ADMIN = process.env.ADMIN_EMAIL; // fallback admin email
     if (!RESEND_API_KEY) {
       return new Response(JSON.stringify({ ok: false, error: 'Missing RESEND_API_KEY' }), { status: 500 });
     }
@@ -43,6 +44,7 @@ export default async (req, context) => {
 
     const results = [];
 
+    // --- Send to customer ---
     if (toCustomer && customer?.email) {
       const subject = `Your Visa Request – Transaction ID ${txId}`;
       const html = `
@@ -52,7 +54,7 @@ export default async (req, context) => {
           ${feeHtml}
           <hr />
           <h3>Submitted details</h3>
-${details?.idUrl ? `<p><strong>ID file:</strong> <a href="${details.idUrl}">${details.idUrl}</a></p>` : ''}
+          ${details?.idUrl ? `<p><strong>ID file:</strong> <a href="${details.idUrl}">${details.idUrl}</a></p>` : ''}
           <pre style="white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;padding:12px;border-radius:8px;">${
             Object.entries(details || {}).map(([k,v]) => `${k}: ${v ?? ''}`).join('\n')
           }</pre>
@@ -66,7 +68,9 @@ ${details?.idUrl ? `<p><strong>ID file:</strong> <a href="${details.idUrl}">${de
       }
     }
 
-    if (toAdmin && zelle?.adminEmail) {
+    // --- Send to admin (with fallback) ---
+    const adminTo = zelle?.adminEmail || DEFAULT_ADMIN;
+    if (toAdmin && adminTo) {
       const subject = `New Visa Request – Transaction ID ${txId}`;
       const html = `
         <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;">
@@ -75,23 +79,24 @@ ${details?.idUrl ? `<p><strong>ID file:</strong> <a href="${details.idUrl}">${de
           ${feeHtml}
           <hr />
           <h3>Submitted details</h3>
-${details?.idUrl ? `<p><strong>ID file:</strong> <a href="${details.idUrl}">${details.idUrl}</a></p>` : ''}
+          ${details?.idUrl ? `<p><strong>ID file:</strong> <a href="${details.idUrl}">${details.idUrl}</a></p>` : ''}
           <pre style="white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;padding:12px;border-radius:8px;">${
             Object.entries(details || {}).map(([k,v]) => `${k}: ${v ?? ''}`).join('\n')
           }</pre>
         </div>
       `;
       try {
-        const data = await send(zelle.adminEmail, subject, html);
-        results.push({ kind: 'admin', to: zelle.adminEmail, id: data?.id || null, ok: true });
+        const data = await send(adminTo, subject, html);
+        results.push({ kind: 'admin', to: adminTo, id: data?.id || null, ok: true });
       } catch (err) {
-        results.push({ kind: 'admin', to: zelle.adminEmail, ok: false, error: String(err) });
+        results.push({ kind: 'admin', to: adminTo, ok: false, error: String(err) });
       }
     }
 
+    // --- Final response ---
     const anyOk = results.some(r => r.ok);
-    const status = anyOk ? 200 : 500;
-    return new Response(JSON.stringify({ ok: anyOk, results }), { status });
+    return new Response(JSON.stringify({ ok: anyOk, results }), { status: anyOk ? 200 : 500 });
+
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), { status: 500 });
   }
