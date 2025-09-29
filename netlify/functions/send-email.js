@@ -1,5 +1,5 @@
 // netlify/functions/send-email.js
-export default async (req, context) => {
+export default async (req) => {
   try {
     if (req.method !== 'POST') {
       return new Response(JSON.stringify({ ok: false, error: 'Method not allowed' }), { status: 405 });
@@ -9,18 +9,18 @@ export default async (req, context) => {
     const { toCustomer, toAdmin, customer = {}, txId = '', details = {}, zelle = {} } = body;
 
     const RESEND_API_KEY = process.env.RESEND_API_KEY;
-    const DEFAULT_ADMIN = process.env.ADMIN_EMAIL; // fallback admin email
+    const DEFAULT_ADMIN = process.env.ADMIN_EMAIL; // set this in Netlify env
     if (!RESEND_API_KEY) {
       return new Response(JSON.stringify({ ok: false, error: 'Missing RESEND_API_KEY' }), { status: 500 });
     }
 
-    // ---- Helpers ------------------------------------------------------------
+    // Determine form type (visa | send_money | passport)
     const formName = (details?.form || '').toString().trim().toLowerCase();
     const resolvedForm =
       formName.includes('passport') ? 'passport'
       : formName.includes('send') || formName.includes('transfer') ? 'send_money'
       : formName.includes('visa') ? 'visa'
-      : 'visa'; // default to visa if not specified
+      : 'visa';
 
     const subjects = {
       visa: {
@@ -50,7 +50,6 @@ export default async (req, context) => {
       `,
       send_money: ``,
     };
-
     const feeHtml = feeBlocks[resolvedForm] || ``;
 
     const prettyDetails = (d) =>
@@ -58,7 +57,7 @@ export default async (req, context) => {
         Object.entries(d || {}).map(([k,v]) => `${k}: ${v ?? ''}`).join('\n')
       }</pre>`;
 
-    const wrap = (title, inner) => `
+    const wrap = (title) => `
       <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;">
         <h2>${title}</h2>
         <p>Transaction ID: <strong>${txId}</strong></p>
@@ -91,20 +90,17 @@ export default async (req, context) => {
       return data;
     };
 
-    // ---- Send emails --------------------------------------------------------
     const results = [];
 
-    // Customer
+    // Customer (only if email present)
     if (toCustomer && customer?.email) {
       const subject = subjects[resolvedForm].customer;
-      const html = wrap(
+      const title =
         resolvedForm === 'send_money' ? 'Thank you for your transfer request'
         : resolvedForm === 'passport' ? 'Thank you for your VN Passport Renewal request'
-        : 'Thank you for your visa request',
-        ''
-      );
+        : 'Thank you for your visa request';
       try {
-        const data = await send(customer.email, subject, html);
+        const data = await send(customer.email, subject, wrap(title));
         results.push({ kind: 'customer', to: customer.email, id: data?.id || null, ok: true });
       } catch (err) {
         results.push({ kind: 'customer', to: customer.email, ok: false, error: String(err) });
@@ -115,23 +111,24 @@ export default async (req, context) => {
     const adminTo = zelle?.adminEmail || DEFAULT_ADMIN;
     if (toAdmin && adminTo) {
       const subject = subjects[resolvedForm].admin;
-      const html = wrap(
+      const title =
         resolvedForm === 'send_money' ? 'New Transfer Request'
         : resolvedForm === 'passport' ? 'New VN Passport Renewal'
-        : 'New Visa Request',
-        ''
-      );
+        : 'New Visa Request';
       try {
-        const data = await send(adminTo, subject, html);
+        const data = await send(adminTo, subject, wrap(title));
         results.push({ kind: 'admin', to: adminTo, id: data?.id || null, ok: true });
       } catch (err) {
         results.push({ kind: 'admin', to: adminTo, ok: false, error: String(err) });
       }
     }
 
-    // Final response
+    // If nobody was emailed, return 200 (don’t break the UI)
+    const anyAttempted = results.length > 0;
     const anyOk = results.some(r => r.ok);
-    return new Response(JSON.stringify({ ok: anyOk, results }), { status: anyOk ? 200 : 500 });
+    const status = anyOk || !anyAttempted ? 200 : 500;
+    return new Response(JSON.stringify({ ok: anyOk || !anyAttempted, results }), { status });
+
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), { status: 500 });
   }
