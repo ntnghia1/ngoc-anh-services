@@ -1,6 +1,7 @@
 // netlify/functions/upload-id.js
-// Accepts JSON: { txId, name, contentType, dataBase64 } and uploads to Supabase Storage "ids" bucket
-export default async (req, context) => {
+import { createClient } from '@supabase/supabase-js';
+
+export default async (req) => {
   try {
     if (req.method !== 'POST') {
       return new Response(JSON.stringify({ ok: false, error: 'Method not allowed' }), { status: 405 });
@@ -17,21 +18,17 @@ export default async (req, context) => {
       return new Response(JSON.stringify({ ok: false, error: 'Missing fields' }), { status: 400 });
     }
 
-    // Lazy import to avoid bundling issues
-    const sup = await import('https://esm.sh/@supabase/supabase-js@2');
-    const { createClient } = sup;
-
     const client = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    const path = `${txId}/${Date.now()}-${name}`.replace(/\s+/g, '_');
-    const blob = Buffer.from(dataBase64, 'base64');
 
     // Ensure bucket exists (ignore error if already exists)
     await client.storage.createBucket('ids', { public: true }).catch(() => {});
 
-    const { data, error } = await client.storage.from('ids').upload(path, blob, {
+    const path = `${txId}/${Date.now()}-${name}`.replace(/\s+/g, '_');
+    const blob = Buffer.from(dataBase64, 'base64');
+
+    const { error } = await client.storage.from('ids').upload(path, blob, {
       contentType,
-      upsert: true
+      upsert: true,
     });
     if (error) throw error;
 
