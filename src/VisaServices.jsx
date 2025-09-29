@@ -85,8 +85,6 @@ try {
     await saveSubmission('visa', rec)
   } catch (_) {}
 
-}
-
   return (
     <div className="max-w-3xl mx-auto p-6 space-y-6">
       <div className="border rounded-xl p-4">
