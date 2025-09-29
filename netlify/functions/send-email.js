@@ -14,6 +14,62 @@ export default async (req, context) => {
       return new Response(JSON.stringify({ ok: false, error: 'Missing RESEND_API_KEY' }), { status: 500 });
     }
 
+    // ---- Helpers ------------------------------------------------------------
+    const formName = (details?.form || '').toString().trim().toLowerCase();
+    const resolvedForm =
+      formName.includes('passport') ? 'passport'
+      : formName.includes('send') || formName.includes('transfer') ? 'send_money'
+      : formName.includes('visa') ? 'visa'
+      : 'visa'; // default to visa if not specified
+
+    const subjects = {
+      visa: {
+        customer: `Your Visa Request – Transaction ID ${txId}`,
+        admin:   `New Visa Request – Transaction ID ${txId}`,
+      },
+      send_money: {
+        customer: `Your Transfer Request – Transaction ID ${txId}`,
+        admin:   `New Transfer Request – Transaction ID ${txId}`,
+      },
+      passport: {
+        customer: `Your VN Passport Renewal – Transaction ID ${txId}`,
+        admin:   `New VN Passport Renewal – Transaction ID ${txId}`,
+      },
+    };
+
+    const feeBlocks = {
+      visa: `
+        <p><strong>Visa fee:</strong> $120</p>
+        <p>Send via <strong>Zelle</strong> to <strong>Ngoc Anh Services</strong> at <strong>720-226-4972</strong>.</p>
+        <p><strong>Memo to include:</strong> Visa fee for application ${txId}</p>
+      `,
+      passport: `
+        <p><strong>Passport Renewal fee:</strong> $230</p>
+        <p>Send via <strong>Zelle</strong> to <strong>Ngoc Anh Services</strong> at <strong>720-226-4972</strong>.</p>
+        <p><strong>Memo to include:</strong> VN Passport Renewal ${txId}</p>
+      `,
+      send_money: ``,
+    };
+
+    const feeHtml = feeBlocks[resolvedForm] || ``;
+
+    const prettyDetails = (d) =>
+      `<pre style="white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;padding:12px;border-radius:8px;">${
+        Object.entries(d || {}).map(([k,v]) => `${k}: ${v ?? ''}`).join('\n')
+      }</pre>`;
+
+    const wrap = (title, inner) => `
+      <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;">
+        <h2>${title}</h2>
+        <p>Transaction ID: <strong>${txId}</strong></p>
+        ${feeHtml}
+        <hr />
+        <h3>Submitted details</h3>
+        ${details?.idUrl ? `<p><strong>ID file:</strong> <a href="${details.idUrl}">${details.idUrl}</a></p>` : ''}
+        ${prettyDetails(details)}
+      </div>
+    `;
+
     const send = async (to, subject, html) => {
       const r = await fetch('https://api.resend.com/emails', {
         method: 'POST',
@@ -35,31 +91,18 @@ export default async (req, context) => {
       return data;
     };
 
-    const memoText = `Visa fee for application ${txId}`;
-    const feeHtml = `
-      <p><strong>Visa fee:</strong> $120</p>
-      <p>Send via <strong>Zelle</strong> to <strong>Ngoc Anh Services</strong> at <strong>720-226-4972</strong>.</p>
-      <p><strong>Memo to include:</strong> ${memoText}</p>
-    `;
-
+    // ---- Send emails --------------------------------------------------------
     const results = [];
 
-    // --- Send to customer ---
+    // Customer
     if (toCustomer && customer?.email) {
-      const subject = `Your Visa Request – Transaction ID ${txId}`;
-      const html = `
-        <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;">
-          <h2>Thank you for your request</h2>
-          <p>Transaction ID: <strong>${txId}</strong></p>
-          ${feeHtml}
-          <hr />
-          <h3>Submitted details</h3>
-          ${details?.idUrl ? `<p><strong>ID file:</strong> <a href="${details.idUrl}">${details.idUrl}</a></p>` : ''}
-          <pre style="white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;padding:12px;border-radius:8px;">${
-            Object.entries(details || {}).map(([k,v]) => `${k}: ${v ?? ''}`).join('\n')
-          }</pre>
-        </div>
-      `;
+      const subject = subjects[resolvedForm].customer;
+      const html = wrap(
+        resolvedForm === 'send_money' ? 'Thank you for your transfer request'
+        : resolvedForm === 'passport' ? 'Thank you for your VN Passport Renewal request'
+        : 'Thank you for your visa request',
+        ''
+      );
       try {
         const data = await send(customer.email, subject, html);
         results.push({ kind: 'customer', to: customer.email, id: data?.id || null, ok: true });
@@ -68,23 +111,16 @@ export default async (req, context) => {
       }
     }
 
-    // --- Send to admin (with fallback) ---
+    // Admin (fallback to env ADMIN_EMAIL)
     const adminTo = zelle?.adminEmail || DEFAULT_ADMIN;
     if (toAdmin && adminTo) {
-      const subject = `New Visa Request – Transaction ID ${txId}`;
-      const html = `
-        <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;">
-          <h2>New Visa Request</h2>
-          <p>Transaction ID: <strong>${txId}</strong></p>
-          ${feeHtml}
-          <hr />
-          <h3>Submitted details</h3>
-          ${details?.idUrl ? `<p><strong>ID file:</strong> <a href="${details.idUrl}">${details.idUrl}</a></p>` : ''}
-          <pre style="white-space:pre-wrap;background:#f8fafc;border:1px solid #e5e7eb;padding:12px;border-radius:8px;">${
-            Object.entries(details || {}).map(([k,v]) => `${k}: ${v ?? ''}`).join('\n')
-          }</pre>
-        </div>
-      `;
+      const subject = subjects[resolvedForm].admin;
+      const html = wrap(
+        resolvedForm === 'send_money' ? 'New Transfer Request'
+        : resolvedForm === 'passport' ? 'New VN Passport Renewal'
+        : 'New Visa Request',
+        ''
+      );
       try {
         const data = await send(adminTo, subject, html);
         results.push({ kind: 'admin', to: adminTo, id: data?.id || null, ok: true });
@@ -93,10 +129,9 @@ export default async (req, context) => {
       }
     }
 
-    // --- Final response ---
+    // Final response
     const anyOk = results.some(r => r.ok);
     return new Response(JSON.stringify({ ok: anyOk, results }), { status: anyOk ? 200 : 500 });
-
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: String(err) }), { status: 500 });
   }
