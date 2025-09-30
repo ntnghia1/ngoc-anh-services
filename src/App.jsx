@@ -23,13 +23,7 @@ import { makeT } from './translator'
 const PrivacyPage = lazy(() => import('./Privacy.jsx'))
 import logo from "./assets/logo.png";
 import VNPassport from './VNPassport.jsx';
-export default function App(){
-  
-  const [showPrivacy, setShowPrivacy] = React.useState(false);
-  React.useEffect(() => {
-    const click = (e) => {
-      const el = e.target && (e.target.closest ? e.target.closest('[data-privacy-link]') : null);
-      if (el) { e.preventDefault(); setShowPrivacy(true); }
+
     };
     document.addEventListener('click', click);
     return () => document.removeEventListener('click', click);
