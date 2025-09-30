@@ -1,3 +1,16 @@
+import Header from "./components/Header.jsx";
+
+export default function App() {
+  return (
+    <>
+      <Header />
+      <main className="min-h-[100dvh]">
+        {/* your Routes / pages here */}
+      </main>
+    </>
+  );
+}
+
 import React, { useState, lazy } from 'react'
 import PrivacyModal from './components/PrivacyModal'
 import { Routes, Route, Link, NavLink } from 'react-router-dom'
